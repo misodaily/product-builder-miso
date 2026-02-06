@@ -24,7 +24,6 @@ const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
 const db = getFirestore(app);
 
-// ✅ 리전 지정(권장): 너 프로젝트 Firestore가 asia-northeast3
 const functions = getFunctions(app, "asia-northeast3");
 const aiScenarioCheck = httpsCallable(functions, "aiScenarioCheck");
 
@@ -160,7 +159,7 @@ async function sha256(str) {
   return Array.from(new Uint8Array(buf)).map(b => b.toString(16).padStart(2, "0")).join("");
 }
 
-// ---------- 시나리오(글자수 제한 없음) ----------
+// ---------- 시나리오 ----------
 function scenarioFromUI() {
   const { ticker } = normalizeTickerInput($("ticker").value);
   return {
@@ -178,7 +177,6 @@ function scenarioFromUI() {
   };
 }
 
-// ✅ 게시 검증 최소화
 function validatePublish(s) {
   const errs = [];
   if (!s.ticker) errs.push("ticker 필요");
@@ -214,15 +212,10 @@ $("btnSave").onclick = async () => {
     hasGaps: true,
   }, { merge: true });
 
-  const tips = [];
-  if ((s.thesis || "").length < 6) tips.push("가설을 한 문장만 더 구체화해보세요.");
-  if ((s.evidence1Text || "").length < 8) tips.push("근거1을 한 줄만 더 추가해보세요.");
-  if ((s.evidence2Text || "").length < 8) tips.push("근거2를 한 줄만 더 추가해보세요.");
-  if (tips.length) setStatus("Draft 저장됨 · " + tips.join(" "), true);
-  else setStatus("Draft 저장됨", true);
+  setStatus("Draft 저장됨", true);
 };
 
-// ---------- 반례 후보 자동 생성(프론트 간단) ----------
+// ---------- 반례 드롭다운 ----------
 function genCounterOptionsSimple(s) {
   const base = [
     "실적/가이던스가 기대에 못 미칠 가능성",
@@ -250,37 +243,73 @@ function fillCounterSelect(options) {
   }
 }
 
+// ---------- AI 결과 렌더(기본 + 심화 토글) ----------
+function renderAiResult(d) {
+  const coach = d.coachComment ? d.coachComment : "(AI 코멘트가 없습니다)";
+  const checkMetrics = Array.isArray(d.checkMetrics) ? d.checkMetrics : [];
+  const watchIssues = Array.isArray(d.watchIssues) ? d.watchIssues : [];
+  const gaps = Array.isArray(d.gaps) ? d.gaps : [];
+  const rewrite = Array.isArray(d.rewrite) ? d.rewrite : [];
+
+  const list = (arr) => arr.length ? `<ul style="margin:6px 0 0 18px;">${arr.map(x=>`<li>${x}</li>`).join("")}</ul>` : `<div class="muted small" style="margin-top:6px;">-</div>`;
+
+  $("aiResult").innerHTML = `
+    <div class="pill">cached: ${d.cached}</div>
+    <div class="pill">score: ${d.score}</div>
+
+    <div style="margin-top:10px;"><b>AI 코치 코멘트</b></div>
+    <div style="margin-top:6px;">${coach}</div>
+
+    <div style="margin-top:12px;"><b>추가로 확인할 지표(3)</b></div>
+    ${list(checkMetrics)}
+
+    <div style="margin-top:12px;"><b>주의 이슈(2)</b></div>
+    ${list(watchIssues)}
+
+    <button id="btnAdvanced" style="margin-top:12px;" class="linklike" type="button">심화 보기</button>
+    <div id="advancedBox" style="display:none; margin-top:10px;">
+      <div><b>gaps</b>: ${gaps.join(" / ")}</div>
+      <div style="margin-top:6px;"><b>rewrite</b>: ${rewrite.join(" / ")}</div>
+    </div>
+
+    <div class="muted small" style="margin-top:10px;">
+      ⓘ 리스크(반례)는 위 드롭다운에서 선택하세요(직접 작성 X)
+    </div>
+  `;
+
+  const btn = $("btnAdvanced");
+  const box = $("advancedBox");
+  if (btn && box) {
+    btn.onclick = () => {
+      const open = box.style.display !== "none";
+      box.style.display = open ? "none" : "block";
+      btn.textContent = open ? "심화 보기" : "심화 닫기";
+    };
+  }
+}
+
 // ---------- AI 점검 ----------
 $("btnAI").onclick = async () => {
   if (!currentUid) return alert("먼저 로그인하세요.");
   if (!currentScenarioId) return alert("먼저 Draft 저장하세요.");
 
-  $("aiResult").textContent = "AI 점검 중...";
+  $("aiResult").textContent = "AI 코치가 분석 중...";
 
   try {
-    // ✅ 우선 로컬(간단) 반례 후보로 즉시 채워서 UX 빠르게
+    // UX: 먼저 로컬 후보로 채워두고(즉시 반응)
     const s = scenarioFromUI();
     fillCounterSelect(genCounterOptionsSimple(s));
 
     const res = await aiScenarioCheck({ scenarioId: currentScenarioId });
     const d = res.data || {};
 
-    // ✅ (추가된 핵심) AI가 준 반례 5개가 있으면 그걸로 드롭다운 덮어쓰기
+    // AI가 반례 옵션을 내려주면 드롭다운 덮어쓰기
     if (Array.isArray(d.counterOptions) && d.counterOptions.length) {
       fillCounterSelect(d.counterOptions);
     }
 
-    $("aiResult").innerHTML = `
-      <div class="pill">cached: ${d.cached}</div>
-      <div class="pill">score: ${d.score}</div>
-      <div style="margin-top:8px;"><b>gaps</b>: ${(d.gaps || []).join(" / ")}</div>
-      <div style="margin-top:6px;"><b>rewrite</b>: ${(d.rewrite || []).join(" / ")}</div>
-      <div class="muted small" style="margin-top:10px;">
-        ⓘ 리스크(반례)는 위 드롭다운에서 선택하세요(직접 작성 X)
-      </div>
-    `;
-
-    setStatus("AI 점검 완료(리스크 선택 후 저장 권장)", true);
+    renderAiResult(d);
+    setStatus("AI 코치 분석 완료(리스크 선택 후 저장 권장)", true);
   } catch (e) {
     console.error(e);
     $("aiResult").textContent = "AI 점검 실패(콘솔 로그 확인)";
@@ -304,7 +333,6 @@ $("btnPublish").onclick = async () => {
     status: "published",
     publishedAt: serverTimestamp(),
     updatedAt: serverTimestamp(),
-    hasGaps: Array.isArray(s.gaps) ? s.gaps.length > 0 : true,
   });
 
   setStatus("게시 완료", true);

@@ -22,7 +22,7 @@ exports.aiScenarioCheck = onCall({ secrets: ["OPENAI_API_KEY_SECRET"] }, async (
     const s = snap.data();
     if (s.uid !== req.auth.uid) throw new HttpsError("permission-denied", "권한이 없습니다.");
 
-    // ✅ 캐시 (비용 절감): contentHash 같고 ai 결과 있으면 재호출 X
+    // ✅ 캐시(비용 절감)
     const hash = s.contentHash || "";
     const cached = !!(s.ai && s.ai.contentHash === hash && s.ai.score != null);
     if (cached) return { ...s.ai, cached: true };
@@ -36,10 +36,11 @@ exports.aiScenarioCheck = onCall({ secrets: ["OPENAI_API_KEY_SECRET"] }, async (
     const metrics = Array.isArray(s.metrics) ? s.metrics : [];
     const counterPick = s.counterPick || "";
 
+    // ✅ “검증”이 아니라 “보조(코치)” 톤으로
     const prompt = `
-너는 투자 조언을 하지 않는 "논리 점검" 심사관이다.
-아래 시나리오를 읽고 논리 품질을 평가하라.
-반드시 JSON만 출력하고, 길이는 짧게 유지하라.
+너는 투자 조언을 하지 않는 "투자 보조 코치"다.
+사용자의 가설을 평가하되, 검증을 강요하지 말고 "다음에 확인할 것" 중심으로 안내해라.
+반드시 JSON만 출력하고, 문장은 짧고 친절하게.
 
 [시나리오]
 ticker: ${ticker}
@@ -51,16 +52,18 @@ metrics: ${metrics.join(", ")}
 sellRule: ${sellRule}
 selectedCounter: ${counterPick}
 
-출력 JSON 스키마:
+출력 JSON 스키마(정확히 이 키들만):
 {
-  "score": number,                 // 0~100
-  "gaps": string[3],               // 논리 구멍 3개
-  "rewrite": string[3],            // 개선 3개
-  "counterOptions": string[5]      // 선택형 반례 5개
+  "score": number,                 // 0~100, 완성도(낙제 뉘앙스 금지)
+  "coachComment": string,          // 1~2문장. 요약+다음 행동 안내
+  "checkMetrics": string[3],       // 추가로 확인할 지표 3개(짧게)
+  "watchIssues": string[2],        // 주의 이슈 2개(짧게)
+  "counterOptions": string[5],     // 선택형 반례 5개(짧게)
+  "gaps": string[3],               // (심화) 논리 구멍 3개
+  "rewrite": string[3]             // (심화) 개선 3개
 }
 `.trim();
 
-    // ✅ 여기 이름도 SECRET로 변경
     const apiKey = process.env.OPENAI_API_KEY_SECRET;
     if (!apiKey) throw new HttpsError("failed-precondition", "OPENAI_API_KEY_SECRET이 설정되지 않았습니다.");
 
@@ -96,9 +99,12 @@ selectedCounter: ${counterPick}
     const result = {
       contentHash: hash,
       score: Number(parsed.score ?? 50),
+      coachComment: String(parsed.coachComment ?? "").slice(0, 220),
+      checkMetrics: Array.isArray(parsed.checkMetrics) ? parsed.checkMetrics.slice(0, 3) : [],
+      watchIssues: Array.isArray(parsed.watchIssues) ? parsed.watchIssues.slice(0, 2) : [],
+      counterOptions: Array.isArray(parsed.counterOptions) ? parsed.counterOptions.slice(0, 5) : [],
       gaps: Array.isArray(parsed.gaps) ? parsed.gaps.slice(0, 3) : [],
       rewrite: Array.isArray(parsed.rewrite) ? parsed.rewrite.slice(0, 3) : [],
-      counterOptions: Array.isArray(parsed.counterOptions) ? parsed.counterOptions.slice(0, 5) : [],
       updatedAt: admin.firestore.FieldValue.serverTimestamp(),
     };
 
