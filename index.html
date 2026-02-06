@@ -1,14 +1,159 @@
 <!doctype html>
-<html lang="en">
+<html lang="ko">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Hello World</title>
-  <link href='/style.css' rel='stylesheet'>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>miso-daily MVP</title>
+  <link href="./style.css" rel="stylesheet" />
+  <style>
+    body { font-family: system-ui, -apple-system, sans-serif; margin: 20px; max-width: 980px; }
+    .card { border: 1px solid #ddd; border-radius: 14px; padding: 16px; margin: 14px 0; }
+    .row { display: flex; gap: 10px; flex-wrap: wrap; }
+    .grid2 { display:grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+    @media (max-width: 720px){ .grid2{ grid-template-columns: 1fr; } }
+    input, textarea, select, button { padding: 10px; border-radius: 12px; border: 1px solid #ccc; width: 100%; box-sizing: border-box; }
+    textarea { min-height: 92px; }
+    button { cursor: pointer; }
+    .btn { background: #ff5a1f; color: #fff; border: none; }
+    .muted { color: #666; font-size: 13px; }
+    .small { font-size: 12px; }
+    .pill { display:inline-block; padding:6px 10px; border:1px solid #ddd; border-radius: 999px; margin: 4px 6px 0 0; }
+    .ok { color: #0a0; } .danger { color:#c00; }
+    .linklike { border:none; background:transparent; color:#333; text-decoration: underline; padding: 0; width: auto; }
+    hr { border:none; border-top:1px solid #eee; margin: 12px 0; }
+  </style>
 </head>
 <body>
-  <h1>Hello, world!</h1>
-  <button onclick="console.log('hello');">Press me</button>
-  <script defer type="text/javascript" src="/main.js"></script>
+  <h1>miso-daily MVP</h1>
+  <p class="muted">시나리오 강제 작성 → AI/사람 검증 → 실패 복기</p>
+
+  <!-- 로그인 -->
+  <section class="card">
+    <h3>1) 로그인</h3>
+
+    <button id="btnGoogle" class="btn">Google로 계속하기</button>
+    <p class="muted small" style="margin-top:8px;">
+      가장 빠르고 안전한 방법 · 비밀번호를 사이트에 저장하지 않아요
+    </p>
+    <p class="muted small">
+      🔒 Google + Firebase Authentication 기반 인증
+    </p>
+
+    <div style="margin-top:12px;">
+      <button id="toggleAlt" class="linklike" type="button">다른 방법으로 로그인</button>
+    </div>
+
+    <div id="altLogin" style="display:none; margin-top:12px;">
+      <hr />
+      <p class="muted small">이메일 로그인은 비밀번호를 직접 입력해야 해요.</p>
+
+      <div class="grid2">
+        <input id="email" placeholder="email" autocomplete="email" />
+        <input id="pw" placeholder="password" type="password" autocomplete="current-password" />
+      </div>
+
+      <div class="row" style="margin-top:10px;">
+        <button id="btnSignup">이메일로 회원가입</button>
+        <button id="btnLogin">이메일로 로그인</button>
+      </div>
+    </div>
+
+    <div class="row" style="margin-top:14px;">
+      <button id="btnLogout">로그아웃</button>
+    </div>
+
+    <p id="authState" class="small muted">로그인 상태: -</p>
+    <p id="loginHint" class="muted small" style="margin-top:10px;"></p>
+  </section>
+
+  <!-- 종목 -->
+  <section class="card">
+    <h3>2) 종목</h3>
+    <input id="ticker" placeholder="예: 테슬 / 테슬라 / TSLA / 005930" />
+    <p id="tickerHint" class="small muted"></p>
+    <p class="small muted">한글/영문 입력을 티커로 자동 변환합니다.</p>
+  </section>
+
+  <!-- 시나리오 -->
+  <section class="card">
+    <h3>3) 시나리오(가볍게 쓰기)</h3>
+
+    <label class="small muted">시간 프레임</label>
+    <select id="timeframe">
+      <option value="2w">2주</option>
+      <option value="1m">1달</option>
+      <option value="3m">3달</option>
+      <option value="6m">6달</option>
+      <option value="1y">1년</option>
+    </select>
+
+    <label class="small muted" style="margin-top:10px;">한 줄 가설(글자수 제한 없음)</label>
+    <input id="thesis" placeholder="(짧게 써도 OK) 왜 사는가를 한 줄로" />
+
+    <div class="grid2" style="margin-top:10px;">
+      <div>
+        <label class="small muted">근거1(글자수 제한 없음)</label>
+        <textarea id="e1t" placeholder="(짧게 써도 OK)"></textarea>
+      </div>
+      <div>
+        <label class="small muted">근거2(글자수 제한 없음)</label>
+        <textarea id="e2t" placeholder="(짧게 써도 OK)"></textarea>
+      </div>
+    </div>
+
+    <label class="small muted" style="margin-top:10px;">리스크(반례) — AI 점검 후 선택</label>
+    <select id="counterPick">
+      <option value="">(AI 점검 후 자동 생성됩니다)</option>
+    </select>
+    <p class="small muted">반례를 직접 쓰지 말고, AI가 제안한 리스크 중 선택하세요.</p>
+
+    <label class="small muted" style="margin-top:10px;">관찰 지표 2개(서로 다르게)</label>
+    <div class="row">
+      <select id="m1" style="flex:1;">
+        <option value="매출">매출</option>
+        <option value="영업이익률">영업이익률</option>
+        <option value="수주">수주</option>
+        <option value="가이던스">가이던스</option>
+        <option value="재고">재고</option>
+        <option value="환율">환율</option>
+      </select>
+      <select id="m2" style="flex:1;">
+        <option value="매출">매출</option>
+        <option value="영업이익률">영업이익률</option>
+        <option value="수주">수주</option>
+        <option value="가이던스">가이던스</option>
+        <option value="재고">재고</option>
+        <option value="환율">환율</option>
+      </select>
+    </div>
+
+    <label class="small muted" style="margin-top:10px;">매도 기준(손절 기준) — 템플릿 선택</label>
+    <select id="exitTpl">
+      <option value="m1_down_2q">지표1이 2분기 연속 하락하면 매도</option>
+      <option value="m2_down_2q">지표2가 2분기 연속 하락하면 매도</option>
+      <option value="guide_down">가이던스 하향 발표 시 매도</option>
+      <option value="thesis_break">가설을 깨는 공시/뉴스 발생 시 매도</option>
+    </select>
+    <p id="exitPreview" class="small muted"></p>
+    <p class="small muted">설명: 이 조건이 나오면 “가설이 틀렸다”고 보고 포지션을 정리합니다.</p>
+
+    <div class="row" style="margin-top:12px;">
+      <button id="btnSave">Draft 저장</button>
+      <button id="btnAI" class="btn">AI로 논리 점검</button>
+      <button id="btnPublish">게시(Publish)</button>
+      <button id="btnClose">종료(Close)</button>
+    </div>
+
+    <p class="small muted">scenarioId: <span id="scenarioId">-</span></p>
+    <div id="validation" class="small muted"></div>
+  </section>
+
+  <!-- AI 결과 -->
+  <section class="card">
+    <h3>4) AI 결과</h3>
+    <div id="aiResult" class="small muted">-</div>
+  </section>
+
+  <script type="module" src="./main.js"></script>
 </body>
 </html>
